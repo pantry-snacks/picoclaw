@@ -316,10 +316,10 @@ func registerSharedTools(
 			// spawn_status which are added below — preventing recursive
 			// subagent spawning.
 			subagentManager.SetTools(agent.Tools.Clone())
-			currentAgentID := agentID
 			if spawnEnabled {
 				spawnTool := tools.NewSpawnTool(subagentManager)
 				spawnTool.SetSpawner(NewSubTurnSpawner(al))
+				currentAgentID := agentID
 				spawnTool.SetAllowlistChecker(func(targetAgentID string) bool {
 					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
 				})
@@ -342,15 +342,7 @@ func registerSharedTools(
 					return agent.Model
 				})
 				agent.Tools.Register(subagentTool)
-
 			}
-				// Register the synchronous batched subagent tool
-				multiSubagentTool := tools.NewMultiSubagentTool(subagentManager)
-				multiSubagentTool.SetSpawner(NewSubTurnSpawner(al))
-				multiSubagentTool.SetAllowlistChecker(func(targetAgentID string) bool {
-					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
-				})
-				agent.Tools.Register(multiSubagentTool)
 			if spawnStatusEnabled {
 				agent.Tools.Register(tools.NewSpawnStatusTool(subagentManager))
 			}
