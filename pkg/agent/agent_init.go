@@ -299,9 +299,10 @@ func registerSharedTools(
 
 				// 5. Build SubTurnConfig
 				cfg := SubTurnConfig{
-					Model:        modelToUse,
-					Tools:        tlSlice,
-					SystemPrompt: systemPrompt,
+					Model:         modelToUse,
+					Tools:         tlSlice,
+					SystemPrompt:  systemPrompt,
+					TargetAgentID: targetAgentID,
 				}
 				if hasMaxTokens {
 					cfg.MaxTokens = maxTokens
