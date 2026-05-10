@@ -2358,6 +2358,78 @@ func TestSpawnSubTurn_TargetAgentID_UsesTargetAgent(t *testing.T) {
 	}
 }
 
+func TestSpawnSubTurn_TargetAgentID_EmitsTargetAgentInRuntimeEvents(t *testing.T) {
+	al, cleanup := newMultiAgentLoop(t, &modelRecordingProvider{})
+	defer cleanup()
+
+	runtimeCh, closeRuntimeEvents := subscribeRuntimeEventsForTest(
+		t,
+		al,
+		8,
+		runtimeevents.KindAgentSubTurnSpawn,
+		runtimeevents.KindAgentSubTurnEnd,
+	)
+	defer closeRuntimeEvents()
+
+	alphaAgent, ok := al.registry.GetAgent("alpha")
+	if !ok {
+		t.Fatal("alpha agent not in registry")
+	}
+
+	parent := &turnState{
+		ctx:            context.Background(),
+		turnID:         "parent-alpha",
+		depth:          0,
+		childTurnIDs:   []string{},
+		pendingResults: make(chan *tools.ToolResult, 4),
+		concurrencySem: make(chan struct{}, testMaxConcurrentSubTurns),
+		session:        &ephemeralSessionStore{},
+		agent:          alphaAgent,
+	}
+
+	result, err := spawnSubTurn(context.Background(), al, parent, SubTurnConfig{
+		TargetAgentID: "beta",
+		SystemPrompt:  "task for beta",
+	})
+	if err != nil {
+		t.Fatalf("spawnSubTurn failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	spawnEvt := waitForRuntimeEvent(t, runtimeCh, time.Second, func(evt runtimeevents.Event) bool {
+		return evt.Kind == runtimeevents.KindAgentSubTurnSpawn
+	})
+	if spawnEvt.Scope.AgentID != "beta" {
+		t.Fatalf("spawn event scope agent_id = %q, want beta", spawnEvt.Scope.AgentID)
+	}
+	if spawnEvt.Source.Name != "beta" {
+		t.Fatalf("spawn event source name = %q, want beta", spawnEvt.Source.Name)
+	}
+	spawnPayload, ok := spawnEvt.Payload.(SubTurnSpawnPayload)
+	if !ok {
+		t.Fatalf("spawn event payload type = %T, want SubTurnSpawnPayload", spawnEvt.Payload)
+	}
+	if spawnPayload.AgentID != "beta" {
+		t.Fatalf("spawn payload agent id = %q, want beta", spawnPayload.AgentID)
+	}
+
+	endEvt := waitForRuntimeEvent(t, runtimeCh, time.Second, func(evt runtimeevents.Event) bool {
+		return evt.Kind == runtimeevents.KindAgentSubTurnEnd
+	})
+	if endEvt.Scope.AgentID != "beta" {
+		t.Fatalf("end event scope agent_id = %q, want beta", endEvt.Scope.AgentID)
+	}
+	endPayload, ok := endEvt.Payload.(SubTurnEndPayload)
+	if !ok {
+		t.Fatalf("end event payload type = %T, want SubTurnEndPayload", endEvt.Payload)
+	}
+	if endPayload.AgentID != "beta" {
+		t.Fatalf("end payload agent id = %q, want beta", endPayload.AgentID)
+	}
+}
+
 func TestSpawnSubTurn_TargetAgentID_NotFound(t *testing.T) {
 	al, cleanup := newMultiAgentLoop(t, &mockProvider{})
 	defer cleanup()
