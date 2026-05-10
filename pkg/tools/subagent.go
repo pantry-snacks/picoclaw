@@ -439,12 +439,13 @@ Task: %s`,
 	// Use spawner if available (direct SpawnSubTurn call)
 	if t.spawner != nil {
 		result, err := t.spawner.SpawnSubTurn(ctx, SubTurnConfig{
-			Model:        modelToUse,
-			Tools:        nil, // Will inherit from parent via context
-			SystemPrompt: systemPrompt,
-			MaxTokens:    t.maxTokens,
-			Temperature:  t.temperature,
-			Async:        false, // Synchronous execution
+			Model:         modelToUse,
+			Tools:         nil, // Will inherit from parent via context
+			SystemPrompt:  systemPrompt,
+			MaxTokens:     t.maxTokens,
+			Temperature:   t.temperature,
+			Async:         false, // Synchronous execution
+			TargetAgentID: agentID,
 		})
 		if err != nil {
 			return ErrorResult(fmt.Sprintf("Subagent execution failed: %v", err)).WithError(err)

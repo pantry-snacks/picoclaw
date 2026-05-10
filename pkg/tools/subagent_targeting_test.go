@@ -55,6 +55,9 @@ func TestSubagentToolUsesResolvedTargetModelForAgentID(t *testing.T) {
 	if spawner.lastCfg.Model != "code-model" {
 		t.Fatalf("expected model code-model, got %q", spawner.lastCfg.Model)
 	}
+	if spawner.lastCfg.TargetAgentID != "code" {
+		t.Fatalf("expected target agent code, got %q", spawner.lastCfg.TargetAgentID)
+	}
 }
 
 func TestSubagentToolFallsBackToDefaultModelWithoutAgentID(t *testing.T) {
@@ -71,5 +74,8 @@ func TestSubagentToolFallsBackToDefaultModelWithoutAgentID(t *testing.T) {
 	}
 	if spawner.lastCfg.Model != "main-model" {
 		t.Fatalf("expected model main-model, got %q", spawner.lastCfg.Model)
+	}
+	if spawner.lastCfg.TargetAgentID != "" {
+		t.Fatalf("expected empty target agent, got %q", spawner.lastCfg.TargetAgentID)
 	}
 }
