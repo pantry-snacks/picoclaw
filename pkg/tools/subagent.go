@@ -97,6 +97,39 @@ func (sm *SubagentManager) SetSpawner(spawner SpawnSubTurnFunc) {
 	sm.spawner = spawner
 }
 
+// CreateTask records a spawned subagent task and returns a stable task ID.
+// Direct async sub-turn execution uses this so spawn_status can observe prompt-level
+// spawn calls even when the actual sub-turn is launched by AgentLoopSpawner instead
+// of the legacy SubagentManager.RunToolLoop path.
+func (sm *SubagentManager) CreateTask(task, label, agentID, originChannel, originChatID string) string {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	return sm.createTaskLocked(task, label, agentID, originChannel, originChatID)
+}
+
+// CompleteTask marks a recorded subagent task as completed or failed.
+func (sm *SubagentManager) CompleteTask(taskID string, result *ToolResult, err error) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	task, ok := sm.tasks[taskID]
+	if !ok {
+		return
+	}
+
+	if err != nil {
+		task.Status = "failed"
+		task.Result = fmt.Sprintf("Error: %v", err)
+		return
+	}
+
+	task.Status = "completed"
+	if result != nil {
+		task.Result = result.ForLLM
+	}
+}
+
 // SetMediaResolver injects a message preprocessor that resolves media:// refs
 // into LLM-ready content before each tool-loop iteration.
 // This is only used by the legacy RunToolLoop fallback path.
@@ -139,12 +172,25 @@ func (sm *SubagentManager) Spawn(
 	callback AsyncCallback,
 ) (string, error) {
 	sm.mu.Lock()
-	defer sm.mu.Unlock()
 
+	taskID := sm.createTaskLocked(task, label, agentID, originChannel, originChatID)
+	subagentTask := sm.tasks[taskID]
+	sm.mu.Unlock()
+
+	// Start task in background with context cancellation support
+	go sm.runTask(ctx, subagentTask, callback)
+
+	if label != "" {
+		return fmt.Sprintf("Spawned subagent '%s' for task: %s", label, task), nil
+	}
+	return fmt.Sprintf("Spawned subagent for task: %s", task), nil
+}
+
+func (sm *SubagentManager) createTaskLocked(task, label, agentID, originChannel, originChatID string) string {
 	taskID := fmt.Sprintf("subagent-%d", sm.nextID)
 	sm.nextID++
 
-	subagentTask := &SubagentTask{
+	sm.tasks[taskID] = &SubagentTask{
 		ID:            taskID,
 		Task:          task,
 		Label:         label,
@@ -154,15 +200,8 @@ func (sm *SubagentManager) Spawn(
 		Status:        "running",
 		Created:       time.Now().UnixMilli(),
 	}
-	sm.tasks[taskID] = subagentTask
 
-	// Start task in background with context cancellation support
-	go sm.runTask(ctx, subagentTask, callback)
-
-	if label != "" {
-		return fmt.Sprintf("Spawned subagent '%s' for task: %s", label, task), nil
-	}
-	return fmt.Sprintf("Spawned subagent for task: %s", task), nil
+	return taskID
 }
 
 func (sm *SubagentManager) runTask(
