@@ -191,15 +191,16 @@ func applySubTurnModelConfig(al *AgentLoop, agent *AgentInstance, model string) 
 	}
 
 	fallbacks := []string(nil)
-	if modelCfg, err := resolvedModelConfig(al.cfg, model, agent.Workspace); err == nil {
+	modelCfg, err := resolvedModelConfig(al.cfg, model, agent.Workspace)
+	if err == nil {
 		factory := providers.CreateProviderFromConfig
 		if al != nil && al.providerFactory != nil {
 			factory = al.providerFactory
 		}
-		provider, _, err := factory(modelCfg)
-		if err != nil {
+		provider, _, providerErr := factory(modelCfg)
+		if providerErr != nil {
 			logger.WarnCF("subturn", "target model provider init failed; inheriting parent provider",
-				map[string]any{"model": model, "error": err.Error()})
+				map[string]any{"model": model, "error": providerErr.Error()})
 		} else {
 			agent.Provider = provider
 		}

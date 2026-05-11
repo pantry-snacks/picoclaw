@@ -324,6 +324,15 @@ func registerSharedTools(
 				spawnTool.SetAllowlistChecker(func(targetAgentID string) bool {
 					return registry.CanSpawnSubagent(currentAgentID, targetAgentID)
 				})
+				spawnTool.SetTargetModelResolver(func(targetAgentID string) string {
+					if targetAgentID == "" {
+						return agent.Model
+					}
+					if targetAgent, ok := al.GetRegistry().GetAgent(targetAgentID); ok {
+						return targetAgent.Model
+					}
+					return agent.Model
+				})
 
 				agent.Tools.Register(spawnTool)
 
