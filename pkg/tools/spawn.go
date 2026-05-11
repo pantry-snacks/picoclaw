@@ -7,11 +7,12 @@ import (
 )
 
 type SpawnTool struct {
-	spawner        SubTurnSpawner
-	defaultModel   string
-	maxTokens      int
-	temperature    float64
-	allowlistCheck func(targetAgentID string) bool
+	spawner             SubTurnSpawner
+	defaultModel        string
+	maxTokens           int
+	temperature         float64
+	allowlistCheck      func(targetAgentID string) bool
+	targetModelResolver func(targetAgentID string) string
 }
 
 // Compile-time check: SpawnTool implements AsyncExecutor.
@@ -66,6 +67,10 @@ func (t *SpawnTool) SetAllowlistChecker(check func(targetAgentID string) bool) {
 	t.allowlistCheck = check
 }
 
+func (t *SpawnTool) SetTargetModelResolver(resolver func(targetAgentID string) string) {
+	t.targetModelResolver = resolver
+}
+
 func (t *SpawnTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	return t.execute(ctx, args, nil)
 }
@@ -101,6 +106,13 @@ func (t *SpawnTool) execute(
 		}
 	}
 
+	modelToUse := t.defaultModel
+	if targetAgentID != "" && t.targetModelResolver != nil {
+		if resolved := t.targetModelResolver(targetAgentID); resolved != "" {
+			modelToUse = resolved
+		}
+	}
+
 	// Build system prompt for spawned subagent
 	systemPrompt := fmt.Sprintf(
 		`You are a spawned subagent running in the background. Complete the given task independently and report back when done.
@@ -124,7 +136,7 @@ Task: %s`,
 		// Launch async sub-turn in goroutine
 		go func() {
 			result, err := t.spawner.SpawnSubTurn(ctx, SubTurnConfig{
-				Model:         t.defaultModel,
+				Model:         modelToUse,
 				Tools:         nil, // Will inherit from parent via context
 				SystemPrompt:  systemPrompt,
 				MaxTokens:     t.maxTokens,

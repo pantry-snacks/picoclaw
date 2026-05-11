@@ -99,6 +99,38 @@ func TestSpawnTool_Execute_ValidTask(t *testing.T) {
 	}
 }
 
+func TestSpawnTool_Execute_UsesResolvedTargetModel(t *testing.T) {
+	provider := &MockLLMProvider{}
+	manager := NewSubagentManager(provider, "parent-model", "/tmp/test")
+	tool := NewSpawnTool(manager)
+	spawner := &mockSpawner{done: make(chan struct{})}
+	tool.SetSpawner(spawner)
+	tool.SetTargetModelResolver(func(targetAgentID string) string {
+		if targetAgentID == "mini" {
+			return "mini-model"
+		}
+		return ""
+	})
+
+	ctx := context.Background()
+	args := map[string]any{
+		"task":     "Do the thing",
+		"agent_id": "mini",
+	}
+
+	result := tool.Execute(ctx, args)
+	if result == nil {
+		t.Fatal("Result should not be nil")
+	}
+	if result.IsError {
+		t.Fatalf("Expected success for valid task, got error: %s", result.ForLLM)
+	}
+	<-spawner.done
+	if spawner.lastConfig.Model != "mini-model" {
+		t.Fatalf("Model = %q, want mini-model", spawner.lastConfig.Model)
+	}
+}
+
 func TestSpawnTool_Execute_NilManager(t *testing.T) {
 	tool := NewSpawnTool(nil)
 
